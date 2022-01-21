@@ -41,6 +41,10 @@ def make_dataset(opts):
             transforms.RandomCrop(64, padding=8, padding_mode='edge'),
 
         ])
+        if opts.initial_aug: 
+            transform_train = transforms.Compose([transform_train,
+                transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5), ])
+
         transform_train = transforms.Compose([transform_train,
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
@@ -84,6 +88,10 @@ def make_dataset(opts):
             transforms.RandomCrop(64, padding=8, padding_mode='edge'),
 
         ])
+        if opts.initial_aug: 
+            transform_train = transforms.Compose([transform_train,
+                transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5), ])
+
         transform_train = transforms.Compose([transform_train,
                                               transforms.RandomHorizontalFlip(),
                                               transforms.ToTensor(),
@@ -127,6 +135,10 @@ def make_dataset(opts):
             transforms.RandomCrop(64, padding=8, padding_mode='edge'),
 
         ])
+        if opts.initial_aug: 
+            transform_train = transforms.Compose([transform_train,
+                transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5), ])
+
         transform_train = transforms.Compose([transform_train,
                                               transforms.RandomHorizontalFlip(),
                                               transforms.ToTensor(),
@@ -167,9 +179,6 @@ def make_dataset(opts):
     start = 0
     end = 1000
 
-    if opts.initial_aug: 
-        transform_train = transforms.Compose([transform_train,
-            transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5), ])
 
     return opts, transform_train, transform_basic, transform_val, transform_test, full_order, dataset_path, test_dataset_paths, start, end
 
@@ -425,7 +434,7 @@ def main(opts, search_params=None):
 
         # set up network
         network = networks.ResNet18(classes=opts.initial_classes, pretrained=None, relu=not opts.no_relu,
-                                    deep_nno=(opts.deep_nno or opts.nno)).to(device)
+                                    deep_nno=(opts.deep_nno or opts.nno), sagnet=opts.sagnet).to(device)
         # set up discriminator
         discriminator = networks.Discriminator(batch_size=batch_size, n_feat=256, n_classes=4).to(device)
 
@@ -496,6 +505,15 @@ def main(opts, search_params=None):
             lr_strat = [epstrat * epochs // 100 for epstrat in epochs_strat]
             scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_strat, gamma=lr_factor)
 
+            if opts.sagnet:
+                style_optimizer = optim.SGD(network.style_params(), lr=learning_rate, momentum=0.9, weight_decay=wght_decay, nesterov=False)
+                style_scheduler = optim.lr_scheduler.MultiStepLR(style_optimizer, milestones=lr_strat, gamma=lr_factor)
+                adv_optimizer = optim.SGD(network.adv_params(), lr=learning_rate, momentum=0.9, weight_decay=wght_decay, nesterov=False)
+                adv_scheduler = optim.lr_scheduler.MultiStepLR(adv_optimizer, milestones=lr_strat, gamma=lr_factor)
+            else:
+                style_optimizer = None
+                adv_optimizer = None
+
             # restore checkpoint after training
             if opts.restore_ckpt and iteration == 0:
                 if opts.ckpt is not None:
@@ -517,8 +535,11 @@ def main(opts, search_params=None):
             subset_trainloader = DataLoader(subset_train_set, batch_size=batch_size, shuffle=True,
                                      num_workers=opts.workers, sampler=None)
             for epoch in range(epochs):
-                trainer.train(epoch, trainloader, subset_trainloader, optimizer, class_dict, iteration)
+                trainer.train(epoch, trainloader, subset_trainloader, optimizer, class_dict, iteration, style_optimizer=style_optimizer, adv_optimizer=adv_optimizer)
                 scheduler.step()
+                if opts.sagnet:
+                    adv_scheduler.step()
+                    style_scheduler.step()
 
             # save checkpoint after training
             if opts.save_ckpt and (iteration == 0 or iteration == icl_steps - 1):
@@ -709,6 +730,7 @@ if __name__ == '__main__':
     parser.add_argument("--rsda", help="Use RSDA by Volpi et all", action='store_true', default=False)
     parser.add_argument("--ssw", help="Self supervised weight for Rotation Task", type=float, default=0.)
     parser.add_argument("--self_challenging", help="Use self challenging (SC) for DA", action='store_true', default=False)
+    parser.add_argument("--sagnet", help="Use sagnet (Style Agnostic Networks, Nam et al) for single source DG", action='store_true', default=False)
 
     # checkpoints
     parser.add_argument("--save_ckpt", help="Whether to save the model after the training",

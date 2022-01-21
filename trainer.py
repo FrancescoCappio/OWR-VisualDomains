@@ -16,6 +16,16 @@ def save_image(tensor, index):
     pil_image = t(tensor)
     pil_image.save(f'{index}.png')
 
+class AdvLoss(torch.nn.Module):
+    def __init__(self, eps=1e-5):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, inputs):
+        inputs = inputs.softmax(dim=1)
+        loss = - torch.log(inputs + self.eps).mean(dim=1)
+        return loss.mean()
+
 class Trainer:
     def __init__(self, opts, network, discriminator, device, logger, augment_ops=None):
         self.ce = nn.CrossEntropyLoss(reduction='mean')
@@ -41,6 +51,7 @@ class Trainer:
         self.bce_weight = opts.bce
         self.ss_weight = opts.ssw
         self.nno = opts.nno
+        self.sagnet = opts.sagnet
 
         # tau
         self.deep_nno = opts.deep_nno  # deep nno
@@ -60,6 +71,11 @@ class Trainer:
         self.num_classes = opts.initial_classes
         self.epochs = opts.epochs
         self.dataset = opts.dataset
+
+        if self.sagnet:
+            self.style_criterion = nn.CrossEntropyLoss()
+            self.adv_criterion = AdvLoss()
+
 
     def next_iteration(self, new_classes):
         self.network2 = copy.deepcopy(self.network)
@@ -88,7 +104,7 @@ class Trainer:
         out[:, -1] = 1. - ((out[:, :x.shape[1]]).sum(1) > 0).float()
         return out
 
-    def train(self, epoch, train_loader, subset_trainloader, optimizer, class_dict, iteration):
+    def train(self, epoch, train_loader, subset_trainloader, optimizer, class_dict, iteration, style_optimizer=None, adv_optimizer=None):
         # Training, single epoch
         print(f'Epoch: {epoch}')
 
@@ -121,7 +137,10 @@ class Trainer:
 
             inputs = inputs.to(self.device)
             optimizer.zero_grad()
-            outputs, feat = self.network(inputs)
+            if self.sagnet:
+                outputs, feat, outputs_style, style_feats = self.network(inputs, enable_sagnet=True)
+            else:
+                outputs, feat = self.network(inputs)
 
             if self.self_challenging:
                 x_new = feat.clone().detach()
@@ -238,11 +257,25 @@ class Trainer:
                     feat = feat.mean(-1).mean(-1)
                     outputs = feat.view(feat.size(0), -1)
 
-            prediction, exp, distances = self.network.predict(outputs)  # prediction from NCM
-
+            if self.sagnet: 
+                (prediction, exp, distances), (prediction_style, _, _) = self.network.predict(outputs, outputs_style)  # prediction from NCM
+            else:
+                prediction, exp, distances = self.network.predict(outputs)  # prediction from NCM
+            
             loss_bx = self.ce_weight * self.ce(exp, targets_prep) + \
                       self.snnl_weight * self.snnl(outputs, targets_prep) + \
                       self.bce_weight * self.bce(prediction, targets)
+
+            if self.sagnet: 
+                style_loss = self.style_criterion(prediction_style, targets_prep)
+                style_optimizer.zero_grad()
+                style_loss.backward(retain_graph=True)
+                
+                adv_loss = self.adv_criterion(prediction_style)
+                adv_optimizer.zero_grad()
+                adv_loss.backward(retain_graph=True)
+                torch.nn.utils.clip_grad_norm_(self.network.adv_params(), 0.1)
+
 
             # add distillation to losses
             if iteration > 0 and self.features_dw > 0:
@@ -290,6 +323,10 @@ class Trainer:
                 loss_bx.backward()
                 optimizer.step()
                 train_loss += loss_bx.item()
+                if self.sagnet:
+                    style_optimizer.step()
+                    adv_optimizer.step()
+
 
             # ## UPDATE MEANS ###
             # For the just learned classes it computes the online (moving) mean
