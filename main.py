@@ -167,6 +167,10 @@ def make_dataset(opts):
     start = 0
     end = 1000
 
+    if opts.initial_aug: 
+        transform_train = transforms.Compose([transform_train,
+            transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5), ])
+
     return opts, transform_train, transform_basic, transform_val, transform_test, full_order, dataset_path, test_dataset_paths, start, end
 
 
@@ -664,6 +668,7 @@ if __name__ == '__main__':
     parser.add_argument("--test", help="Name of the dataset(s) used for testing", nargs='+', type=str, default='all')
     parser.add_argument("--dataset_path", help="Where data are located", type=str, default='data')
     parser.add_argument("--workers", help="Number of workers for data loader", type=int, default=2)
+    parser.add_argument("--initial_aug", help="Enable additional augmentations (color jittering) at training time", action='store_true')
 
     parser.add_argument("--epochs_init", help="Initial epochs", type=int, default=-1)
     parser.add_argument("--epochs", help="Epochs after first iteration", type=int, default=-1)
