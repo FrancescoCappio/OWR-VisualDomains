@@ -116,6 +116,8 @@ class ResNet(nn.Module):
 
     def update_means(self, x, y):
         self.linear.update_means(x, y)
+        if self.sagnet:
+            self.style_linear.update_means(x, y)
 
     def predict(self, x, x_style=None):
         out = self.linear(x)
@@ -127,6 +129,8 @@ class ResNet(nn.Module):
     def add_classes(self, new_classes):
         if new_classes == 0:
             return
+        if self.sagnet:
+            self.style_linear.add_classes(new_classes)
         self.linear.add_classes(new_classes)
         self.num_classes += new_classes
 
