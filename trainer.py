@@ -51,6 +51,10 @@ class Trainer:
         self.bce_weight = opts.bce
         self.ss_weight = opts.ssw
         self.nno = opts.nno
+        self.ssil = opts.ssil
+        if self.ssil:
+            self.ce = nn.CrossEntropyLoss(reduction='sum')
+
         self.sagnet = opts.sagnet
 
         # tau
@@ -104,7 +108,7 @@ class Trainer:
         out[:, -1] = 1. - ((out[:, :x.shape[1]]).sum(1) > 0).float()
         return out
 
-    def train(self, epoch, train_loader, subset_trainloader, optimizer, class_dict, iteration, style_optimizer=None, adv_optimizer=None):
+    def train(self, epoch, train_loader, subset_trainloader, optimizer, class_dict, iteration, task_classes_dict, style_optimizer=None, adv_optimizer=None):
         # Training, single epoch
         print(f'Epoch: {epoch}')
 
@@ -262,9 +266,54 @@ class Trainer:
             else:
                 prediction, exp, distances = self.network.predict(outputs)  # prediction from NCM
             
-            loss_bx = self.ce_weight * self.ce(exp, targets_prep) + \
-                      self.snnl_weight * self.snnl(outputs, targets_prep) + \
-                      self.bce_weight * self.bce(prediction, targets)
+            if self.ssil:
+                if iteration == 0:
+                    # during the first learning episode we only have current episode classes to learn
+                    loss_bx = self.ce(exp, targets_prep)
+                    loss_bx /= len(targets_prep)
+                else:
+                    # we should separate current classes samples and old classes one 
+                    current_classes_mask = torch.zeros_like(targets_prep,dtype=bool)
+                    for lbl in task_classes_dict[iteration]: 
+                        current_classes_mask[targets_prep==lbl]=True
+                    old_classes_mask = ~current_classes_mask
+
+                    # current 
+                    current_targets = targets_prep[current_classes_mask] - task_classes_dict[iteration][0]
+                    current_outs = exp[current_classes_mask,task_classes_dict[iteration][0]:]
+                    current_ce = self.ce(current_outs, current_targets)
+                    current_count = len(current_targets)
+
+                    # old classes: 
+                    old_targets = targets_prep[old_classes_mask]
+                    old_outs = exp[old_classes_mask,:task_classes_dict[iteration][0]]
+                    old_ce = self.ce(old_outs, old_targets)
+                    old_count = len(old_targets)
+                    
+                    total_ce = (current_ce + old_ce) / (current_count + old_count)
+
+                    # task wise knowledge distillation 
+                    outputs_prev, _ = self.network2(inputs)
+                    _, exp_previous, _ = self.network2.predict(outputs_prev)
+
+                    target_scores = exp_previous[:,:task_classes_dict[iteration][0]]
+                    loss_KD = torch.zeros(iteration).cuda()
+                    temperature = 2
+                    for t in range(iteration):
+                        start_KD = task_classes_dict[t][0]
+                        end_KD = task_classes_dict[t][-1]+1
+
+                        soft_target = F.softmax(target_scores[:,start_KD:end_KD] / temperature, dim=1)
+                        output_log = F.log_softmax(exp[:,start_KD:end_KD] / temperature, dim=1)
+                        loss_KD[t] = F.kl_div(output_log, soft_target, reduction='batchmean') * (temperature**2)
+                    loss_KD = loss_KD.sum()
+
+                    loss_bx = total_ce + loss_KD
+
+            else:
+                loss_bx = self.ce_weight * self.ce(exp, targets_prep) + \
+                          self.snnl_weight * self.snnl(outputs, targets_prep) + \
+                          self.bce_weight * self.bce(prediction, targets)
 
             if self.sagnet: 
                 style_loss = self.style_criterion(prediction_style, targets_prep)

@@ -443,22 +443,27 @@ def main(opts, search_params=None):
         trainer = Trainer(opts, network, discriminator, device, logger, augment_ops)
         exemplar_handler = Exemplars(network, device)
 
+        task_classes_dict = {}
+
         # ## INCREMENTAL TRAINING ##
         # Incremental step: in each step the model learns new classes
         for iteration in range(icl_steps):
             # Prepare the training data for the current batch of classes
             start_class = (iteration > 0) * (nb_initial + (iteration - 1) * nb_cl)
             last_class = nb_initial + iteration * nb_cl
-            actual_cl = order[range(start_class, last_class)]
+            actual_cl = order[range(start_class, last_class)] # classes for current incremental step
 
+            task_classes_dict[iteration] = []
             for i, el in enumerate(actual_cl):
-                class_dict[el] = i + start_class  # dict: class : index. (Es. 4:0, 7:1, ...)
+                class_dict[el] = i + start_class  # dict: class : index. (Es. 4:0, 7:1, ...) -> mapping to incremental cls lbls
+                task_classes_dict[iteration].append(i + start_class)
 
             # make the new dataset
             train_set = opts.data_class(root=dataset_path, split='train', classes=actual_cl,
                                         target_transform=class_dict, transform=transform_train)
             val_set = opts.data_class(root=dataset_path, split='val', classes=actual_cl,
                                       target_transform=class_dict, transform=transform_test)
+            # if this is not a parameter search run we use also val samples for training
             if not opts.search:
                 train_set.samples.extend(val_set.samples)
 
@@ -476,6 +481,7 @@ def main(opts, search_params=None):
                 ex_samples = exemplar_handler.get_exemplar_samples()
                 train_set.samples.extend(ex_samples)
                 len_with_ex = len(train_set.samples)
+                # sampling weight controls the ratio of exemplars in the batch -> increase weith of exemplars
                 weights = np.ones(len_with_ex)
                 weights[len_no_ex:] *= opts.ratio / ((len_with_ex - len_no_ex + 0.0) / len_with_ex)
 
@@ -534,8 +540,9 @@ def main(opts, search_params=None):
 
             subset_trainloader = DataLoader(subset_train_set, batch_size=batch_size, shuffle=True,
                                      num_workers=opts.workers, sampler=None)
+
             for epoch in range(epochs):
-                trainer.train(epoch, trainloader, subset_trainloader, optimizer, class_dict, iteration, style_optimizer=style_optimizer, adv_optimizer=adv_optimizer)
+                trainer.train(epoch, trainloader, subset_trainloader, optimizer, class_dict, iteration, task_classes_dict, style_optimizer=style_optimizer, adv_optimizer=adv_optimizer)
                 scheduler.step()
                 if opts.sagnet:
                     adv_scheduler.step()
@@ -547,7 +554,7 @@ def main(opts, search_params=None):
                 ckpt_path = f"checkpoints/{opts.dataset}/{opts.name}_ordine{iteration_total}_{iteration}"
                 save_ckpt(ckpt_path, network, trainer)
 
-            # ## VALIDATION PHASE ###
+            # ## VALIDATION PHASE - BDOC only ###
             if not opts.no_tau_val:
                 # add exemplars to val dataset
                 if iteration > 0:
@@ -725,6 +732,7 @@ if __name__ == '__main__':
     parser.add_argument("--multiple_taus", help="Whether to use only one global tau or one tau per class",
                         action='store_false', default=True)
     parser.add_argument("--bdoc", help="Use bdoc by clustering method", action='store_true', default=False)
+    parser.add_argument("--ssil", help="Use separated softmax (and TKD) as class incremental strategy", action='store_true', default=False)
 
     # DOMAIN ADAPTATION METHODS
     parser.add_argument("--rsda", help="Use RSDA by Volpi et all", action='store_true', default=False)
@@ -770,6 +778,11 @@ if __name__ == '__main__':
         args.nno = False
 
         args.method = 'bdoc'
+
+    if args.ssil:
+        args.no_tau_val = True
+        args.multiple_taus = False
+        args.method = 'ssil'
 
     if args.search:
         # Grid search section
