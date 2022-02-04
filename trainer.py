@@ -11,6 +11,8 @@ import torchvision.transforms as T
 import random
 import numpy.random as npr
 
+SSIL_TAU = torch.tensor(0.999)
+
 def save_image(tensor, index):
     t = T.ToPILImage()
     pil_image = t(tensor)
@@ -54,6 +56,7 @@ class Trainer:
         self.ssil = opts.ssil
         if self.ssil:
             self.ce = nn.CrossEntropyLoss(reduction='sum')
+        self.bdoc = opts.bdoc
 
         self.sagnet = opts.sagnet
 
@@ -61,7 +64,9 @@ class Trainer:
         self.deep_nno = opts.deep_nno  # deep nno
         self.tau_val = not opts.no_tau_val
         self.multiple_taus = opts.multiple_taus
-        if opts.multiple_taus:
+        if self.ssil: 
+            self.tau = SSIL_TAU
+        elif opts.multiple_taus:
             self.tau = Parameter(torch.ones(opts.initial_classes, device=device)*0.5, requires_grad=True)
         else:
             self.tau = Parameter(torch.tensor([0.5], device=device), requires_grad=True)
@@ -85,13 +90,15 @@ class Trainer:
         self.network2 = copy.deepcopy(self.network)
         self.network2.eval()
         # Duplicate current network to distillate info
-        self.network.linear.reset()  # reset the counters for NCM
+        if not self.ssil:
+            self.network.linear.reset()  # reset the counters for NCM
         # Prepare internal structure (allocate mean array, etc) for the new classes
         self.network.add_classes(new_classes)
         # Store the new number of classes
         self.num_classes += new_classes
-
-        if self.tau_val and self.multiple_taus:
+        if self.ssil: 
+            self.tau = SSIL_TAU
+        elif self.tau_val and self.multiple_taus:
             self.tau = Parameter(torch.cat((self.tau, torch.ones(new_classes, device=self.device)*0.5), 0))
         if self.tau_val and not self.multiple_taus:
             self.tau = Parameter(torch.tensor([0.5], device=self.device), requires_grad=True)
@@ -99,13 +106,19 @@ class Trainer:
     def reject(self, x, dist, tau=None):
         out = torch.zeros(x.shape[0], x.shape[1] + 1).to(x.device)
 
-        if self.deep_nno or self.nno:
-            out[:, :x.shape[1]] = (x > tau).float() * 1. * x
+        if self.ssil:
+            probs = F.softmax(x, dim=1)
+            out[:, :x.shape[1]] = (probs > tau).float() * 1. * x 
+            # last column gets 1 if no classes predictions were maintained in that column
+            out[:, -1][(out>0).float().sum(1)>0] = 1. 
         else:
-            out[:, :x.shape[1]] = (dist <= tau).float() * 1. * x
+            if self.deep_nno or self.nno:
+                out[:, :x.shape[1]] = (x > tau).float() * 1. * x
+            else:
+                out[:, :x.shape[1]] = (dist <= tau).float() * 1. * x
 
-        # last column contains probabilities (distances) for unknown.
-        out[:, -1] = 1. - ((out[:, :x.shape[1]]).sum(1) > 0).float()
+            # last column contains probabilities (distances) for unknown.
+            out[:, -1] = 1. - ((out[:, :x.shape[1]]).sum(1) > 0).float()
         return out
 
     def train(self, epoch, train_loader, subset_trainloader, optimizer, class_dict, iteration, task_classes_dict, style_optimizer=None, adv_optimizer=None):
@@ -381,7 +394,7 @@ class Trainer:
             # For the just learned classes it computes the online (moving) mean
             self.network.update_means(outputs, targets_prep.to('cpu'))
 
-            if not self.deep_nno and not self.nno:
+            if self.bdoc:
                 self.tau.data = self.network.linear.get_average_dist(dim=-1)
 
             if self.deep_nno or (iteration == 0 and self.nno):

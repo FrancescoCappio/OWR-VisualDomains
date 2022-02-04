@@ -433,8 +433,13 @@ def main(opts, search_params=None):
         print(f'Order {iteration_total} starting ...')
 
         # set up network
-        network = networks.ResNet18(classes=opts.initial_classes, pretrained=None, relu=not opts.no_relu,
-                                    deep_nno=(opts.deep_nno or opts.nno), sagnet=opts.sagnet).to(device)
+        if not opts.ssil:
+            network = networks.ResNet18(classes=opts.initial_classes, pretrained=None, relu=not opts.no_relu,
+                                        deep_nno=(opts.deep_nno or opts.nno), sagnet=opts.sagnet).to(device)
+        else:
+            network = networks.ResNet18fc(classes=opts.initial_classes, pretrained=None, relu=not opts.no_relu,
+                                    sagnet=opts.sagnet).to(device)
+
         # set up discriminator
         discriminator = networks.Discriminator(batch_size=batch_size, n_feat=256, n_classes=4).to(device)
 
