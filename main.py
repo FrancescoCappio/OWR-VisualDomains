@@ -283,6 +283,7 @@ def get_params(opts):
             opts.epochs_init = 25
             opts.epochs = 12
 
+    '''
     if opts.dataset == 'synARID_crops_square':
         if opts.rsda or opts.ssw:
             opts.epochs_init = 120
@@ -290,6 +291,7 @@ def get_params(opts):
             opts.epochs_init = 70
 
         opts.epochs = 35
+    '''
 
     return opts
 

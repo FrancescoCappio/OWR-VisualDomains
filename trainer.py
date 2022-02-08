@@ -109,8 +109,8 @@ class Trainer:
         if self.ssil:
             probs = F.softmax(x, dim=1)
             out[:, :x.shape[1]] = (probs > tau).float() * 1. * x 
-            # last column gets 1 if no classes predictions were maintained in that column
-            out[:, -1][(out>0).float().sum(1)>0] = 1. 
+            # last column gets 1 if no classes predictions were maintained in that row
+            out[:, -1][(out>0).float().sum(1)<=0] = 1.
         else:
             if self.deep_nno or self.nno:
                 out[:, :x.shape[1]] = (x > tau).float() * 1. * x
