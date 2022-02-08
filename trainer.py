@@ -135,6 +135,10 @@ class Trainer:
         correct = 0
         ss_correct = 0
         total = 0
+        current_correct = 0
+        current_total = 0
+        old_correct = 0
+        old_total = 0
         count = 0
         print(f"Tau: {self.tau}")
 
@@ -279,6 +283,23 @@ class Trainer:
             else:
                 prediction, exp, distances = self.network.predict(outputs)  # prediction from NCM
             
+            
+            # we should separate current classes samples and old classes one 
+            current_classes_mask = torch.zeros_like(targets_prep,dtype=bool)
+            for lbl in task_classes_dict[iteration]: 
+                current_classes_mask[targets_prep==lbl]=True
+            old_classes_mask = ~current_classes_mask
+
+            # current 
+            current_targets = targets_prep[current_classes_mask] - task_classes_dict[iteration][0]
+            current_outs = exp[current_classes_mask,task_classes_dict[iteration][0]:]
+            current_count = len(current_targets)
+
+            # old classes: 
+            old_targets = targets_prep[old_classes_mask]
+            old_outs = exp[old_classes_mask,:task_classes_dict[iteration][0]]
+            old_count = len(old_targets)
+
             if self.ssil:
                 if iteration == 0:
                     # during the first learning episode we only have current episode classes to learn
@@ -292,17 +313,11 @@ class Trainer:
                     old_classes_mask = ~current_classes_mask
 
                     # current 
-                    current_targets = targets_prep[current_classes_mask] - task_classes_dict[iteration][0]
-                    current_outs = exp[current_classes_mask,task_classes_dict[iteration][0]:]
                     current_ce = self.ce(current_outs, current_targets)
-                    current_count = len(current_targets)
 
                     # old classes: 
-                    old_targets = targets_prep[old_classes_mask]
-                    old_outs = exp[old_classes_mask,:task_classes_dict[iteration][0]]
                     old_ce = self.ce(old_outs, old_targets)
-                    old_count = len(old_targets)
-                    
+
                     total_ce = (current_ce + old_ce) / (current_count + old_count)
 
                     # task wise knowledge distillation 
@@ -432,9 +447,25 @@ class Trainer:
                 _, ss_predicted = p0.max(1)
                 ss_correct += ss_predicted.eq(targets_prep_ss).sum().item()
 
+            if iteration > 0:
+                if current_count > 0:
+                    current_pred = current_outs.argmax(1)
+                    current_correct += current_pred.eq(current_targets).sum().item()
+                    current_total += current_count
+
+                if old_count > 0:
+                    old_pred = old_outs.argmax(1)
+                    old_correct += old_pred.eq(old_targets).sum().item()
+                    old_total += old_count
+
             if count % 20 == 0:
-                print(f'[{int((100. * idx) / len(train_loader)):03d}%] == Loss: {train_loss / count:.3f}, '
-                      f'Acc: {100. * correct / total:.3f} [{correct}/{total}]')
+                print(f'[{int((100. * idx) / len(train_loader)):03d}%] == Loss: {train_loss / count:.3f}, LR: {optimizer.param_groups[0]["lr"] :.3f}, '
+                      f'Acc: {100. * correct / total:.3f} [{correct}/{total}]',end=' ')
+                if iteration > 0:
+                    print(f'Acc current: {100. * current_correct/current_total :.3f}, Acc old: {100. * old_correct/old_total :.3f}', end=' ')
+                print("") # new line
+
+                    
 
         self.logger.log_training(epoch, train_loss / len(train_loader), 100. * correct / total, iteration)
 
