@@ -11,7 +11,7 @@ import torchvision.transforms as T
 import random
 import numpy.random as npr
 
-SSIL_TAU = torch.tensor(0.999)
+
 
 def save_image(tensor, index):
     t = T.ToPILImage()
@@ -65,7 +65,7 @@ class Trainer:
         self.tau_val = not opts.no_tau_val
         self.multiple_taus = opts.multiple_taus
         if self.ssil: 
-            self.tau = SSIL_TAU
+            self.tau = torch.tensor(opts.SSIL_TAU)
         elif opts.multiple_taus:
             self.tau = Parameter(torch.ones(opts.initial_classes, device=device)*0.5, requires_grad=True)
         else:
@@ -97,7 +97,7 @@ class Trainer:
         # Store the new number of classes
         self.num_classes += new_classes
         if self.ssil: 
-            self.tau = SSIL_TAU
+            self.tau = self.tau
         elif self.tau_val and self.multiple_taus:
             self.tau = Parameter(torch.cat((self.tau, torch.ones(new_classes, device=self.device)*0.5), 0))
         if self.tau_val and not self.multiple_taus:
@@ -108,7 +108,7 @@ class Trainer:
 
         if self.ssil:
             probs = F.softmax(x, dim=1)
-            out[:, :x.shape[1]] = (probs > tau).float() * 1. * x 
+            out[:, :x.shape[1]] = (probs > tau).float() * 1. * probs
             # last column gets 1 if no classes predictions were maintained in that row
             out[:, -1][(out>0).float().sum(1)<=0] = 1.
         else:
