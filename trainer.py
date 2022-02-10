@@ -267,7 +267,7 @@ class Trainer:
                     th_fg_value = torch.sort(change_vector, dim=0, descending=True)[0][
                         int(round(float(batch_size) * 1 / 3))]
                     drop_index_fg = change_vector.gt(th_fg_value)
-                    ignore_index_fg = 1 - drop_index_fg
+                    ignore_index_fg = ~drop_index_fg
                     not_01_ignore_index_fg = ignore_index_fg.nonzero()[:, 0]
                     mask_all[not_01_ignore_index_fg.long(), :] = 1
 
