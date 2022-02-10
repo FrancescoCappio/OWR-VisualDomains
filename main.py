@@ -279,9 +279,11 @@ def get_params(opts):
         opts.epochs = int(
             opts.epochs_init * opts.incremental_classes / opts.initial_classes) if opts.epochs == -1 else opts.epochs
 
+        '''
         if opts.rsda:
             opts.epochs_init = 25
             opts.epochs = 12
+        '''
 
     '''
     if opts.dataset == 'synARID_crops_square':
