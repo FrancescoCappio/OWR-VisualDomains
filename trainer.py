@@ -149,6 +149,8 @@ class Trainer:
             train_loader.dataset.set_transform(transform)
 
         for idx, (inputs, targets_prep) in enumerate(train_loader):
+            if self.augment_ops is not None: # rsda
+                self.network.train()
             count += 1
 
             # one_hot_encoding targets
