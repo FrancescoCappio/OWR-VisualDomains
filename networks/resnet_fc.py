@@ -72,6 +72,9 @@ class ResNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
+        # initialize the linear layer
+        self.linear.weight.data.normal_(0, 0.1)
+        self.linear.bias.data.zero_()
 
     def _make_layer(self, block, planes, num_blocks, stride, last=False):
         strides = [stride] + [1] * (num_blocks - 1)
