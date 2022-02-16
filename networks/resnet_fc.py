@@ -124,8 +124,8 @@ class ResNet(nn.Module):
         out = self.linear(x)[:,:self.num_classes] # we select from the output scores those for currently learned classes
         if self.sagnet and x_style is not None:
             out_style = self.style_linear(x_style)[:,:self.num_classes] # we select from the output scores those for currently learned classes
-            return (out, out, out), (out_style, out_style, out_style)
-        return out, out, out
+            return (out, out, 1/out), (out_style, out_style, 1/out_style)
+        return out, out, 1/out
 
     def add_classes(self, new_classes):
         if new_classes == 0:

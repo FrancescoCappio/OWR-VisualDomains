@@ -239,6 +239,7 @@ class RODFolder(FilteredDatasetFolder):
 
     def make_dataset(self, dir, split, classes):
         path = dir.split("/")[:-2]
+
         split_file = np.genfromtxt(f'{path[0]}/{path[1]}/additionals/{split}.txt', dtype='unicode')
         images = []
 

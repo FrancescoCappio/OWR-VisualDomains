@@ -59,7 +59,8 @@ def make_dataset(opts):
 
         transform_val = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'), ])
+            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            ])
         if not opts.no_tau_val:
             transform_val = transforms.Compose([transform_val,
                                                 transforms.ColorJitter(brightness=0.1, saturation=0.1, hue=0.1), ])
@@ -78,6 +79,52 @@ def make_dataset(opts):
         test_dataset_paths = [dataset_path]
         if not opts.search:
             test_dataset_paths = [f'{opts.dataset_path}/{test}/{test}_reorganized/' for test in opts.test]
+
+    elif opts.dataset == 'COSDA-HR':
+        opts.data_class = RODFolder
+        opts.batch_size = 128 if opts.batch_size == -1 else opts.batch_size
+        opts.valid_batchsize = 64 if opts.valid_batchsize == -1 else opts.valid_batchsize
+        transform_train = transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+
+        ])
+        if opts.initial_aug: 
+            transform_train = transforms.Compose([transform_train,
+                transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5), ])
+
+        transform_train = transforms.Compose([transform_train,
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (1., 1., 1.)),
+        ])
+
+        transform_basic = transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            transforms.RandomHorizontalFlip(),
+        ])
+
+        transform_val = transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            ])
+        if not opts.no_tau_val:
+            transform_val = transforms.Compose([transform_val,
+                                                transforms.ColorJitter(brightness=0.1, saturation=0.1, hue=0.1), ])
+        transform_val = transforms.Compose([transform_val,
+                                            transforms.RandomHorizontalFlip(),
+                                            transforms.ToTensor(),
+                                            transforms.Normalize((0.5, 0.5, 0.5), (1., 1., 1.)),
+                                            ])
+
+        transform_test = transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (1., 1., 1.)),
+        ])
+        dataset_path = opts.dataset_path + '/COSDA-HR/data/'
+        test_dataset_paths = [dataset_path]
 
     elif opts.dataset == 'synARID_crops_square':
         opts.data_class = RODFolder
@@ -106,7 +153,8 @@ def make_dataset(opts):
 
         transform_val = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'), ])
+            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            ])
         if not opts.no_tau_val:
             transform_val = transforms.Compose([transform_val,
                                                 transforms.ColorJitter(brightness=0.1, saturation=0.1, hue=0.1), ])
@@ -268,12 +316,6 @@ def get_params(opts):
         opts.CLASSES = 11
     else:
         # standard OWR
-        opts.initial_classes = 11
-        opts.incremental_classes = 5
-        opts.CLASSES = 51
-        opts.unk = 25
-        opts.unk_step = 5
-        opts.validation_size = 50
         opts.orders = 5
         opts.epochs_init = 12 if opts.epochs_init == -1 else opts.epochs_init
         opts.epochs = int(
@@ -701,7 +743,7 @@ if __name__ == '__main__':
     parser.add_argument("--orders", help="Number of orders", type=int, default=5)
     parser.add_argument("--name", help="Name of the experiments", type=str, default='exp')
     parser.add_argument("--dataset", help="Name of the dataset used for training", type=str,
-                        choices=['rgbd-dataset', 'arid_40k_dataset_crops', 'synARID_crops_square'])
+                        choices=['rgbd-dataset', 'arid_40k_dataset_crops', 'synARID_crops_square', 'COSDA-HR'])
     parser.add_argument("--test", help="Name of the dataset(s) used for testing", nargs='+', type=str, default='all')
     parser.add_argument("--dataset_path", help="Where data are located", type=str, default='data')
     parser.add_argument("--workers", help="Number of workers for data loader", type=int, default=2)
@@ -767,9 +809,18 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # TEST DATASETS
-    if args.test == 'all':
-        args.test = ['rgbd-dataset', 'arid_40k_dataset_crops', 'synARID_crops_square']
+    if args.dataset == "COSDA-HR":
+        args.test = ['COSDA-HR-target']
+        args.initial_classes = 10
+        args.incremental_classes = 10
+        args.classes = 161
+        args.unk = 1
+        args.unk_step = 1
+
+    else:
+        # TEST DATASETS
+        if args.test == 'all':
+            args.test = ['rgbd-dataset', 'arid_40k_dataset_crops', 'synARID_crops_square']
 
     # METHODS
     if args.nno or args.deep_nno:  # dnno

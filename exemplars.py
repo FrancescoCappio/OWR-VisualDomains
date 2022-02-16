@@ -38,7 +38,10 @@ class Exemplars:
 
         # select the topk images that will become exemplars
         minimals = torch.from_numpy(np.array(vals))
-        _, idxs = torch.topk(minimals, k=int(m), largest=False)
+        if len(minimals) > int(m):
+            _, idxs = torch.topk(minimals, k=int(m), largest=False)
+        else:
+            idxs = torch.arange(len(minimals))
         for i in idxs:
             exemplar.append(loader.dataset.samples[i])
 
