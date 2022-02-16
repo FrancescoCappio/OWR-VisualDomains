@@ -32,13 +32,19 @@ def create_log_folder(log):
 def make_dataset(opts):
     full_order = np.load(opts.dataset_path + '/fixed_order.npy')
 
+    
+    crop_transform = transforms.RandomCrop(64, padding=8, padding_mode='edge')
+    if opts.small_crops:
+        crop_transform = transforms.RandomResizedCrop(scale=(0.08,1.0),size=64)
+
+
     if opts.dataset == 'rgbd-dataset':
         opts.data_class = RODFolder
         opts.batch_size = 128 if opts.batch_size == -1 else opts.batch_size
         opts.valid_batchsize = 64 if opts.valid_batchsize == -1 else opts.valid_batchsize
         transform_train = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
 
         ])
         if opts.initial_aug: 
@@ -53,13 +59,13 @@ def make_dataset(opts):
 
         transform_basic = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
             transforms.RandomHorizontalFlip(),
         ])
 
         transform_val = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
             ])
         if not opts.no_tau_val:
             transform_val = transforms.Compose([transform_val,
@@ -86,7 +92,7 @@ def make_dataset(opts):
         opts.valid_batchsize = 64 if opts.valid_batchsize == -1 else opts.valid_batchsize
         transform_train = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
 
         ])
         if opts.initial_aug: 
@@ -101,13 +107,13 @@ def make_dataset(opts):
 
         transform_basic = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
             transforms.RandomHorizontalFlip(),
         ])
 
         transform_val = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
             ])
         if not opts.no_tau_val:
             transform_val = transforms.Compose([transform_val,
@@ -132,7 +138,7 @@ def make_dataset(opts):
         opts.valid_batchsize = 64 if opts.valid_batchsize == -1 else opts.valid_batchsize
         transform_train = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
 
         ])
         if opts.initial_aug: 
@@ -147,13 +153,13 @@ def make_dataset(opts):
 
         transform_basic = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
             transforms.RandomHorizontalFlip(),
         ])
 
         transform_val = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
             ])
         if not opts.no_tau_val:
             transform_val = transforms.Compose([transform_val,
@@ -180,7 +186,7 @@ def make_dataset(opts):
         opts.valid_batchsize = 64 if opts.valid_batchsize == -1 else opts.valid_batchsize
         transform_train = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
 
         ])
         if opts.initial_aug: 
@@ -195,13 +201,14 @@ def make_dataset(opts):
 
         transform_basic = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'),
+            crop_transform,
             transforms.RandomHorizontalFlip(),
         ])
 
         transform_val = transforms.Compose([
             transforms.Resize((64, 64)),
-            transforms.RandomCrop(64, padding=8, padding_mode='edge'), ])
+            crop_transform,
+            ])
         if not opts.no_tau_val:
             transform_val = transforms.Compose([transform_val,
                                                 transforms.ColorJitter(brightness=0.1, saturation=0.1, hue=0.1), ])
@@ -310,10 +317,10 @@ def get_params(opts):
         opts.epochs = int(opts.epochs_init * opts.incremental_classes / opts.initial_classes)
         opts.orders = 1
         opts.validation_size = 80
-        opts.unk = 2
+        opts.unk = 1
         opts.unk_step = 1
         opts.initial_classes = 5
-        opts.CLASSES = 11
+        opts.CLASSES = 10
     else:
         # standard OWR
         opts.orders = 5
@@ -748,6 +755,7 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_path", help="Where data are located", type=str, default='data')
     parser.add_argument("--workers", help="Number of workers for data loader", type=int, default=2)
     parser.add_argument("--initial_aug", help="Enable additional augmentations (color jittering) at training time", action='store_true')
+    parser.add_argument("--small_crops", help="Use random resized crop with small crops as additional data augmentation", action='store_true')
 
     parser.add_argument("--epochs_init", help="Initial epochs", type=int, default=-1)
     parser.add_argument("--epochs", help="Epochs after first iteration", type=int, default=-1)
@@ -813,7 +821,7 @@ if __name__ == '__main__':
         args.test = ['COSDA-HR-target']
         args.initial_classes = 10
         args.incremental_classes = 10
-        args.classes = 161
+        args.CLASSES = 161
         args.unk = 1
         args.unk_step = 1
 
