@@ -464,7 +464,15 @@ class Trainer:
                 print(f'[{int((100. * idx) / len(train_loader)):03d}%] == Loss: {train_loss / count:.3f}, LR: {optimizer.param_groups[0]["lr"] :.3f}, '
                       f'Acc: {100. * correct / total:.3f} [{correct}/{total}]',end=' ')
                 if iteration > 0:
-                    print(f'Acc current: {100. * current_correct/current_total :.3f}, Acc old: {100. * old_correct/old_total :.3f}', end=' ')
+                    if current_total > 0:
+                        current_acc = current_correct/current_total
+                    else:
+                        current_acc = -1
+                    if old_total > 0:
+                        old_acc = old_correct/old_total
+                    else:
+                        old_acc = -1
+                    print(f'Acc current: {100. * current_acc :.3f}, Acc old: {100. * old_acc :.3f}', end=' ')
                 print("") # new line
 
                     
