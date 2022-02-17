@@ -547,7 +547,7 @@ def main(opts, search_params=None):
                 sampler = WeightedRandomSampler(weights=weights, num_samples=len_with_ex)
 
             trainloader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle,
-                                     num_workers=opts.workers, sampler=sampler)
+                                     num_workers=opts.workers, sampler=sampler, drop_last=True)
 
             # Setup Network
             if iteration > 0:
@@ -597,7 +597,7 @@ def main(opts, search_params=None):
                                                           target_transform=class_dict, transform=None)
 
             subset_trainloader = DataLoader(subset_train_set, batch_size=batch_size, shuffle=True,
-                                     num_workers=opts.workers, sampler=None)
+                                     num_workers=opts.workers, sampler=None, drop_last=True)
 
             for epoch in range(epochs):
                 trainer.train(epoch, trainloader, subset_trainloader, optimizer, class_dict, iteration, task_classes_dict, style_optimizer=style_optimizer, adv_optimizer=adv_optimizer)
@@ -621,7 +621,7 @@ def main(opts, search_params=None):
                 print("Starting threshold(s) validation...")
                 # dataset
                 validloader = torch.utils.data.DataLoader(val_set_tau, batch_size=args.valid_batchsize, shuffle=False,
-                                                          num_workers=args.workers)
+                                                          num_workers=args.workers, drop_last=True)
                 # optimizer
                 valid_optimizer = optim.SGD([trainer.tau], lr=args.tau_lr, momentum=0.9, weight_decay=wght_decay,
                                             nesterov=False)
@@ -648,7 +648,7 @@ def main(opts, search_params=None):
                     class_set = LightFilteredDatasetFolder(samples=train_set.get_samples_class(order[y]),
                                                            target_transform=None, transform=transform_test)
                     loader = torch.utils.data.DataLoader(class_set, batch_size=batch_size, shuffle=False,
-                                                         num_workers=args.workers)
+                                                         num_workers=args.workers, drop_last=True)
                     exemplar_handler.construct_exemplar_set(loader, exemplars_m, y, type='train')
 
                     if not opts.no_tau_val:
@@ -656,7 +656,7 @@ def main(opts, search_params=None):
                         class_set = LightFilteredDatasetFolder(samples=val_set_tau.get_samples_class(order[y]),
                                                                target_transform=None, transform=transform_test)
                         loader = torch.utils.data.DataLoader(class_set, batch_size=batch_size, shuffle=False,
-                                                             num_workers=args.workers)
+                                                             num_workers=args.workers, drop_last=True)
                         exemplar_handler.construct_exemplar_set(loader, valid_m, y, type='val')
                 print(f"Done")
 
