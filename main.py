@@ -813,7 +813,7 @@ if __name__ == '__main__':
     parser.add_argument("--ce", help="CE weight", type=float, default=0.)
     parser.add_argument("--bce", help="BCE_nologits weight", type=float, default=0.)
 
-    parser.add_argument("--SSIL_TAU", help="Threshold for SSIL", type=float, default=0.9)
+    parser.add_argument("--SSIL_TAU", help="Threshold for SSIL", type=float, default=0.7)
 
     args = parser.parse_args()
 
