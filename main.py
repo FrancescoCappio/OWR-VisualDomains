@@ -86,7 +86,7 @@ def make_dataset(opts):
         if not opts.search:
             test_dataset_paths = [f'{opts.dataset_path}/{test}/{test}_reorganized/' for test in opts.test]
 
-    elif opts.dataset == 'COSDA-HR':
+    elif opts.dataset in 'COSDA-HR' or 'CORe50':
         opts.data_class = RODFolder
         opts.batch_size = 128 if opts.batch_size == -1 else opts.batch_size
         opts.valid_batchsize = 64 if opts.valid_batchsize == -1 else opts.valid_batchsize
@@ -129,7 +129,11 @@ def make_dataset(opts):
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (1., 1., 1.)),
         ])
+
         dataset_path = opts.dataset_path + '/COSDA-HR/data/'
+        if opts.dataset == 'CORe50':
+            dataset_path = opts.dataset_path + '/CORe50/data/'
+
         test_dataset_paths = [dataset_path]
 
     elif opts.dataset == 'synARID_crops_square':
@@ -425,7 +429,7 @@ def perform_search(opts):
         best_params[param_name] = values[idx.item()]
 
     # Save
-    np.save(f'{opts.dataset_path}/{opts.dataset}/additionals/{opts.name}_{opts.dataset}_best_config', best_params)
+    np.save(f'{opts.dataset_path}/{opts.dataset}/additionals/{opts.method}_{opts.name}_{opts.dataset}_best_config', best_params)
 
 
 def main(opts, search_params=None):
@@ -673,10 +677,18 @@ def main(opts, search_params=None):
                 acc = trainer.test_closed_world(testloader)
                 top1_acc_list[test_dataset][iteration, 0, iteration_total] = acc
 
+
                 for i in range(int(opts.unk / opts.unk_step + 1)):
+                    # at iteration i = 0 we test on known classes
+                    # at iteration i = 1 we test on unknown 
+
                     idx_classes = range(0, last_class)  # classi known
                     if i > 0:
                         idx_classes = list(range(opts.CLASSES - opts.unk, opts.CLASSES - opts.unk + i * opts.unk_step))
+                        # TODO: if dataset is CORe50 idx_classes should contain list of ids of unknown classes
+                        if opts.dataset == "CORe50":
+                            idx_classes = list(range(last_class, opts.CLASSES))
+
 
                     test_set = opts.data_class(root=test_dataset, split='val' if opts.search else 'test',
                                                classes=order[idx_classes],
@@ -750,7 +762,7 @@ if __name__ == '__main__':
     parser.add_argument("--orders", help="Number of orders", type=int, default=5)
     parser.add_argument("--name", help="Name of the experiments", type=str, default='exp')
     parser.add_argument("--dataset", help="Name of the dataset used for training", type=str,
-                        choices=['rgbd-dataset', 'arid_40k_dataset_crops', 'synARID_crops_square', 'COSDA-HR'])
+                        choices=['rgbd-dataset', 'arid_40k_dataset_crops', 'synARID_crops_square', 'COSDA-HR', 'CORe50'])
     parser.add_argument("--test", help="Name of the dataset(s) used for testing", nargs='+', type=str, default='all')
     parser.add_argument("--dataset_path", help="Where data are located", type=str, default='data')
     parser.add_argument("--workers", help="Number of workers for data loader", type=int, default=2)
@@ -823,6 +835,14 @@ if __name__ == '__main__':
         args.incremental_classes = 10
         args.CLASSES = 161
         args.unk = 1
+        args.unk_step = 1
+
+    elif args.dataset == "CORe50":
+        args.test = ['CORe50-target']
+        args.initial_classes = 3
+        args.incremental_classes = 2
+        args.CLASSES = 10
+        args.unk = 1 # the number of unk classes is not fixed, but it is managed later
         args.unk_step = 1
 
     else:
