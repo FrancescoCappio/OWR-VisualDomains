@@ -66,17 +66,18 @@ class FilteredDatasetFolder(data.Dataset):
     def get_samples_class(self, y):
         return list(filter(lambda x: x[1] == y, self.samples))
 
-    def reduce(self, size=50):
+    def reduce(self, size=50): # 50% in val set
         train_samples = []
         val_samples = []
+
+        size = size/100
 
         # for each class in the iteration
         for label in torch.unique(torch.tensor(self.targets)):
             samples = self.get_samples_class(label.item())
-            # 20% for validation
-            val_samples = val_samples + samples[:size]
-            # 80% for training
-            train_samples = train_samples + samples[size:]
+            sect = int(len(samples)*size)
+            val_samples = val_samples + samples[:sect]
+            train_samples = train_samples + samples[sect:]
 
         # replace training samples with the reducted version
         self.samples = train_samples

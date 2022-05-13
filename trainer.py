@@ -573,7 +573,7 @@ class Trainer:
         valid_loss = 0
 
         print(f"Tau: {self.tau.mean().cpu().detach().numpy()}")
-
+        
         for idx, (inputs, targets_prep) in enumerate(valid_loader):
 
             optimizer.zero_grad()
@@ -594,6 +594,7 @@ class Trainer:
                 loss_bx.backward()
                 optimizer.step()
                 valid_loss += loss_bx.item()
+            print("Valid loss: ", loss_bx.item())
 
         self.logger.log_valid(epoch, valid_loss / len(valid_loader), self.tau.mean().item(), iteration)
 

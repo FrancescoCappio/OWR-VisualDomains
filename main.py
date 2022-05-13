@@ -86,7 +86,7 @@ def make_dataset(opts):
         if not opts.search:
             test_dataset_paths = [f'{opts.dataset_path}/{test}/{test}_reorganized/' for test in opts.test]
 
-    elif opts.dataset == 'COSDA-HR':
+    elif opts.dataset in ['COSDA-HR', 'FSIOL-310']:
         opts.data_class = RODFolder
         opts.batch_size = 128 if opts.batch_size == -1 else opts.batch_size
         opts.valid_batchsize = 64 if opts.valid_batchsize == -1 else opts.valid_batchsize
@@ -129,7 +129,7 @@ def make_dataset(opts):
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (1., 1., 1.)),
         ])
-        dataset_path = opts.dataset_path + '/COSDA-HR/data/'
+        dataset_path = opts.dataset_path + '/' + opts.dataset + '/data/'
         test_dataset_paths = [dataset_path]
 
     elif opts.dataset == 'synARID_crops_square':
@@ -313,8 +313,12 @@ def get_search_params(opts, param_name, param_value, best):
 
 def get_params(opts):
     if opts.search:
-        opts.epochs_init = 12
-        opts.epochs = int(opts.epochs_init * opts.incremental_classes / opts.initial_classes)
+        if opts.dataset == "FSIOL-310":
+            opts.epochs_init = 50
+            opts.epochs = 50
+        else:
+            opts.epochs_init = 12
+            opts.epochs = int(opts.epochs_init * opts.incremental_classes / opts.initial_classes)
         opts.orders = 1
         opts.validation_size = 80
         opts.unk = 1
@@ -425,7 +429,7 @@ def perform_search(opts):
         best_params[param_name] = values[idx.item()]
 
     # Save
-    np.save(f'{opts.dataset_path}/{opts.dataset}/additionals/{opts.name}_{opts.dataset}_best_config', best_params)
+    np.save(f'{opts.dataset_path}/{opts.dataset}/additionals/{opts.method}_{opts.name}_{opts.dataset}_best_config', best_params)
 
 
 def main(opts, search_params=None):
@@ -545,9 +549,8 @@ def main(opts, search_params=None):
 
                 shuffle = False
                 sampler = WeightedRandomSampler(weights=weights, num_samples=len_with_ex)
-
             trainloader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle,
-                                     num_workers=opts.workers, sampler=sampler, drop_last=True)
+                                     num_workers=opts.workers, sampler=sampler, drop_last=False)
 
             # Setup Network
             if iteration > 0:
@@ -597,7 +600,7 @@ def main(opts, search_params=None):
                                                           target_transform=class_dict, transform=None)
 
             subset_trainloader = DataLoader(subset_train_set, batch_size=batch_size, shuffle=True,
-                                     num_workers=opts.workers, sampler=None, drop_last=True)
+                                     num_workers=opts.workers, sampler=None, drop_last=False)
 
             for epoch in range(epochs):
                 trainer.train(epoch, trainloader, subset_trainloader, optimizer, class_dict, iteration, task_classes_dict, style_optimizer=style_optimizer, adv_optimizer=adv_optimizer)
@@ -621,7 +624,7 @@ def main(opts, search_params=None):
                 print("Starting threshold(s) validation...")
                 # dataset
                 validloader = torch.utils.data.DataLoader(val_set_tau, batch_size=args.valid_batchsize, shuffle=False,
-                                                          num_workers=args.workers, drop_last=True)
+                                                          num_workers=args.workers, drop_last=False)
                 # optimizer
                 valid_optimizer = optim.SGD([trainer.tau], lr=args.tau_lr, momentum=0.9, weight_decay=wght_decay,
                                             nesterov=False)
@@ -648,7 +651,7 @@ def main(opts, search_params=None):
                     class_set = LightFilteredDatasetFolder(samples=train_set.get_samples_class(order[y]),
                                                            target_transform=None, transform=transform_test)
                     loader = torch.utils.data.DataLoader(class_set, batch_size=batch_size, shuffle=False,
-                                                         num_workers=args.workers, drop_last=True)
+                                                         num_workers=args.workers, drop_last=False)
                     exemplar_handler.construct_exemplar_set(loader, exemplars_m, y, type='train')
 
                     if not opts.no_tau_val:
@@ -656,7 +659,7 @@ def main(opts, search_params=None):
                         class_set = LightFilteredDatasetFolder(samples=val_set_tau.get_samples_class(order[y]),
                                                                target_transform=None, transform=transform_test)
                         loader = torch.utils.data.DataLoader(class_set, batch_size=batch_size, shuffle=False,
-                                                             num_workers=args.workers, drop_last=True)
+                                                             num_workers=args.workers, drop_last=False)
                         exemplar_handler.construct_exemplar_set(loader, valid_m, y, type='val')
                 print(f"Done")
 
@@ -674,9 +677,13 @@ def main(opts, search_params=None):
                 top1_acc_list[test_dataset][iteration, 0, iteration_total] = acc
 
                 for i in range(int(opts.unk / opts.unk_step + 1)):
+                    # at iteration i = 0 we test on known classes
+                    # at iteration i = 1 we test on unknown
                     idx_classes = range(0, last_class)  # classi known
                     if i > 0:
                         idx_classes = list(range(opts.CLASSES - opts.unk, opts.CLASSES - opts.unk + i * opts.unk_step))
+                        if opts.dataset == "FSIOL-310":
+                            idx_classes = list(range(last_class, opts.CLASSES))
 
                     test_set = opts.data_class(root=test_dataset, split='val' if opts.search else 'test',
                                                classes=order[idx_classes],
@@ -750,7 +757,7 @@ if __name__ == '__main__':
     parser.add_argument("--orders", help="Number of orders", type=int, default=5)
     parser.add_argument("--name", help="Name of the experiments", type=str, default='exp')
     parser.add_argument("--dataset", help="Name of the dataset used for training", type=str,
-                        choices=['rgbd-dataset', 'arid_40k_dataset_crops', 'synARID_crops_square', 'COSDA-HR'])
+                        choices=['rgbd-dataset', 'arid_40k_dataset_crops', 'synARID_crops_square', 'COSDA-HR', 'FSIOL-310'])
     parser.add_argument("--test", help="Name of the dataset(s) used for testing", nargs='+', type=str, default='all')
     parser.add_argument("--dataset_path", help="Where data are located", type=str, default='data')
     parser.add_argument("--workers", help="Number of workers for data loader", type=int, default=2)
@@ -824,7 +831,13 @@ if __name__ == '__main__':
         args.CLASSES = 161
         args.unk = 1
         args.unk_step = 1
-
+    elif args.dataset == "FSIOL-310":
+        args.test = ['FSIOL-310-target']
+        args.initial_classes = 10
+        args.incremental_classes = 5
+        args.CLASSES = 22
+        args.unk = 1 # real number of unknown classes managed later 
+        args.unk_step = 1
     else:
         # TEST DATASETS
         if args.test == 'all':
