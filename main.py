@@ -685,10 +685,6 @@ def main(opts, search_params=None):
                     idx_classes = range(0, last_class)  # classi known
                     if i > 0:
                         idx_classes = list(range(opts.CLASSES - opts.unk, opts.CLASSES - opts.unk + i * opts.unk_step))
-                        # TODO: if dataset is CORe50 idx_classes should contain list of ids of unknown classes
-                        if opts.dataset == "CORe50":
-                            idx_classes = list(range(last_class, opts.CLASSES))
-
 
                     test_set = opts.data_class(root=test_dataset, split='val' if opts.search else 'test',
                                                classes=order[idx_classes],
@@ -839,10 +835,10 @@ if __name__ == '__main__':
 
     elif args.dataset == "CORe50":
         args.test = ['CORe50-target']
-        args.initial_classes = 3
-        args.incremental_classes = 2
-        args.CLASSES = 10
-        args.unk = 1 # the number of unk classes is not fixed, but it is managed later
+        args.initial_classes = 10
+        args.incremental_classes = 5
+        args.CLASSES = 50
+        args.unk = 25
         args.unk_step = 1
 
     else:
